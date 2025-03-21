@@ -1,0 +1,134 @@
+using System;
+using System.Collections;
+using UnityEngine;
+
+[SelectionBase]
+public class Player_Cont : MonoBehaviour
+{
+    #region Enums
+    private enum Directions { UP, DOWN, LEFT, RIGHT }
+    #endregion
+
+    #region Editor Data
+    [Header("Movement Attributes")]
+    [SerializeField] float _walkSpeed = 5f;
+    [SerializeField] float _sprintSpeed = 10f;
+    [SerializeField] float _dashPower = 24f;
+    [SerializeField] float _dashDuration = 0.2f;
+    [SerializeField] float _dashCooldown = 1f;
+
+    [Header("Dependencies")]
+    [SerializeField] Rigidbody2D _rb;
+    [SerializeField] Animator _animator;
+    [SerializeField] SpriteRenderer _spriteRenderer;
+    [SerializeField] TrailRenderer _trailRenderer;
+    #endregion
+
+    #region Internal Data
+    private Vector2 _moveDir = Vector2.zero;
+    private Directions _facingDirection = Directions.RIGHT;
+    private bool _isDashing = false;
+    private bool _canDash = true;
+    private bool _isSprinting = false;
+
+    private readonly int _animMoveRight = Animator.StringToHash("Anim_Player_Move_Right");
+    private readonly int _animIdleRight = Animator.StringToHash("Anim_Player_Idle_Right");
+    #endregion
+
+    #region Tick
+    private void Update()
+    {
+        if (!_isDashing)
+        {
+            GatherInput();
+            CalculateFacingDirection();
+            UpdateAnimation();
+        }
+
+        if (Input.GetKeyDown(KeyCode.LeftShift))
+            _isSprinting = true;
+        else if (Input.GetKeyUp(KeyCode.LeftShift))
+            _isSprinting = false;
+
+        if (Input.GetKeyDown(KeyCode.Space) && _canDash)
+            StartCoroutine(Dash());
+    }
+
+    private void FixedUpdate()
+    {
+        if (!_isDashing)
+        {
+            MovementUpdate();
+        }
+    }
+    #endregion
+
+    #region Input Logic
+    private void GatherInput()
+    {
+        float horz = Input.GetAxisRaw("Horizontal");
+        float vert = Input.GetAxisRaw("Vertical");
+
+        // Allow 8-way movement
+        _moveDir = new Vector2(horz, vert).normalized;
+    }
+    #endregion
+
+    #region Movement Logic
+    private void MovementUpdate()
+    {
+        float speed = _isSprinting ? _sprintSpeed : _walkSpeed;
+        _rb.linearVelocity = _moveDir * speed;
+    }
+
+    private IEnumerator Dash()
+    {
+        _canDash = false;
+        _isDashing = true;
+
+        // Apply dash velocity
+        _rb.linearVelocity = _moveDir * _dashPower;
+        if (_trailRenderer != null)
+            _trailRenderer.emitting = true;
+
+        // Dash duration
+        yield return new WaitForSeconds(_dashDuration);
+
+        // End dash
+        _isDashing = false;
+        if (_trailRenderer != null)
+            _trailRenderer.emitting = false;
+
+        // Reset movement speed
+        _rb.linearVelocity = _moveDir * (_isSprinting ? _sprintSpeed : _walkSpeed);
+
+        // Cooldown
+        yield return new WaitForSeconds(_dashCooldown);
+        _canDash = true;
+    }
+    #endregion
+
+    #region Animation Logic
+    private void CalculateFacingDirection()
+    {
+        if (_moveDir.x != 0)
+        {
+            _facingDirection = _moveDir.x > 0 ? Directions.RIGHT : Directions.LEFT;
+        }
+    }
+
+    private void UpdateAnimation()
+    {
+        _spriteRenderer.flipX = (_facingDirection == Directions.LEFT);
+
+        if (_moveDir.sqrMagnitude > 0)
+        {
+            _animator.CrossFade(_animMoveRight, 0);
+        }
+        else
+        {
+            _animator.CrossFade(_animIdleRight, 0);
+        }
+    }
+    #endregion
+}
